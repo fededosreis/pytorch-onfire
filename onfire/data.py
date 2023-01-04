@@ -42,13 +42,15 @@ class OnFireDataset(Dataset):
         self.db = lmdb.open(tmpdir, map_size=self.map_size, lock=False, max_readers=self.max_readers)
         self.key_struct = struct.Struct("!q")
         it = [(self.key_struct.pack(i), msgpack.packb(x)) for i, x in enumerate(self.data)]
-        with self.db.begin(write=True) as txn:
+        with self.db.begin(write=True, buffers=True) as txn:
             with txn.cursor() as cursor:
                 cursor.putmulti(it)
+            self.txn = txn
 
     def __getitem__(self, idx):
         if self.use_lmdb:
-            self.open_lmdb()
+            if not hasattr(self, 'txn'):
+                self.open_lmdb()
             key = self.key_struct.pack(idx)
             with self.db.begin() as txn:
                 return msgpack.unpackb(txn.get(key))
