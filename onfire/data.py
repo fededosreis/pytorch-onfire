@@ -34,7 +34,8 @@ class OnFireDataset(Dataset):
         if self.use_lmdb:
             self.max_readers = max_readers
             self.map_size = map_size
-        self.data = data
+        else:
+            self.data = data
         self._len = len(data)
 
     def open_lmdb(self):
