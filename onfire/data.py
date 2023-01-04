@@ -32,19 +32,23 @@ class OnFireDataset(Dataset):
     def __init__(self, data, max_readers, map_size:int=1024**4):
         self.use_lmdb = max_readers > 1
         if self.use_lmdb:
-            tmpdir = tempfile.TemporaryDirectory().name
-            self.db = lmdb.open(tmpdir, map_size=map_size, lock=False, max_readers=max_readers)
-            self.key_struct = struct.Struct("!q")
-            it = [(self.key_struct.pack(i), msgpack.packb(x)) for i, x in enumerate(data)]
-            with self.db.begin(write=True) as txn:
-                with txn.cursor() as cursor:
-                    cursor.putmulti(it)
-        else:
-            self.data = data
+            self.max_readers = max_readers
+            self.map_size = map_size
+        self.data = data
         self._len = len(data)
+
+    def open_lmdb(self):
+        tmpdir = tempfile.TemporaryDirectory().name
+        self.db = lmdb.open(tmpdir, map_size=self.map_size, lock=False, max_readers=self.max_readers)
+        self.key_struct = struct.Struct("!q")
+        it = [(self.key_struct.pack(i), msgpack.packb(x)) for i, x in enumerate(self.data)]
+        with self.db.begin(write=True) as txn:
+            with txn.cursor() as cursor:
+                cursor.putmulti(it)
 
     def __getitem__(self, idx):
         if self.use_lmdb:
+            self.open_lmdb()
             key = self.key_struct.pack(idx)
             with self.db.begin() as txn:
                 return msgpack.unpackb(txn.get(key))
